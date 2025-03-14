@@ -5,25 +5,27 @@ In this project, I will explore how the attributes and moves of Pokémon influen
 The plan is to:
 1. Analyze the Pokémon dataset to understand the relationships between stats and battle outcomes.
 2. Simulate battles based on these attributes and predict the winner using machine learning algorithms.
-3. Develop actionable insights about how specific stats or moves affect battle performance.
+3. Develop insights about how specific stats or moves affect battle performance.
 Objectives
-1. Understand Battle Influencers Investigate how Pokémon stats (Attack, Defense, Speed, etc.) and move effectiveness contribute to determining the outcome of a battle.
-2. Simulate Battles Using Data Develop a system to simulate battles between Pokémon by incorporating their stats and available moves.
-3. Predict Battle Outcomes Train a machine learning model to predict the winner of a battle based on Pokémon attributes, moves, and types.
-4. Apply Data Science Skills Use Python and machine learning tools to analyze and simulate Pokémon battles, demonstrating real-world applications of data science techniques.
+1. Understand Battle Influencers:  Look through how some Pokémon stats (Attack, Defense, Speed, etc.) and move effectiveness contribute to determining the outcome of a battle.
+2. Simulate Battles Using Data:  Develop a simplified system to simulate battles between Pokémon by incorporating their stats and available moves.
+3. Predict Battle Outcomes:  Train a machine learning model to predict the winner of a battle based on Pokémon attributes, moves, and types.
+4. Apply Data Science Skills:  Use Python and machine learning tools to analyze and simulate Pokémon battles, demonstrating real-world applications of data science techniques.
 Motivation
-This project combines my interest in Pokémon and data science. Here's why it matters:
-* Personal Interest: Pokémon has been a part of my childhood, and exploring how its mechanics can be analyzed using data science excites me.
-* Understanding Strategy: I want to uncover which Pokémon stats and moves make the biggest difference in battle outcomes. This could help players strategize better in competitive play.
+This project combines my interest in Pokémon and data science:
+* Personal Interest: I wanted to do my data science project on something that I think would be both entertaining and challenging, so I thought that Pokemon Battles would be the perfect balance in between.
+* Understanding Each Data Better: I want to uncover which Pokémon stats and moves make the biggest difference in battle outcomes. This could help players strategize better in competitive play.
 * Real-World Application: I aim to apply machine learning to real-world scenarios like battle simulations, which could extend to gaming analytics and other competitive environments.
-* Long-Term Impact: By the end of the project, I'll have a deeper understanding of both data science and game mechanics, which I can apply to future projects and challenges.
+* Long-Term Impact: By the end of the project, I'll have a deeper understanding of both data science and game mechanics, which I can apply to future projects and challenges (and in my matches too).
 Dataset
-The dataset used for this project is the Full Pokémon and Moves Dataset, which includes detailed information about Pokémon and their moves. Here’s what it contains:
+The dataset used for this project is the Full Pokémon and Moves Dataset, which includes two separate datasets, one that includes the Pokedex (the stats of all pokemon) and the other is the moveset dataset that's going to enable me to look into battles between pokemons.
+https://www.kaggle.com/datasets/thiagoamancio/full-pokemons-and-moves-datasets?select=metadata_pokemon.csv
+Here are the contents:
 * Pokémon Attributes:
     * Name
     * Base stats (Attack, Defense, Speed, HP, Special Attack, Special Defense)
     * Type(s)
-    * Evolutions (if applicable)
+    * Evolutions (if applicable) // This might be too complicated though
 * Moves:
     * Move names
     * Move power, accuracy, and type
@@ -35,9 +37,8 @@ For the analysis and battle simulation, I’ll rely on the following tools:
 * Python: For data cleaning, preprocessing, and building machine learning models
 * Pandas: For manipulating and analyzing the dataset
 * Matplotlib and Seaborn: For visualizing relationships between attributes and battle outcomes
-* Scikit-learn: For implementing machine learning algorithms to predict battle outcomes
+* An ML Algorithm: For implementing machine learning algorithms to predict battle outcomes
 * NumPy: For numerical operations and handling large datasets
-* Jupyter Notebooks: For data exploration, analysis, and visualization
 Analysis Plan
 1. Data Collection and Cleaning
 * Load and preprocess the dataset using Pandas.
@@ -52,13 +53,9 @@ Analysis Plan
 * Simulate 1v1 Pokémon battles by considering both Pokémon’s stats, moves, and type advantages.
 * Calculate damage dealt based on the Pokémon's attack, type effectiveness, and move power.
 5. Modeling
-* Train machine learning models (e.g., logistic regression, random forest, or neural networks) to predict the winner of a battle based on Pokémon stats and move choices.
-* Evaluate model performance using accuracy, precision, recall, and other classification metrics.
-6. Hypothesis Testing
-* Test hypotheses like:
-    * H₀: Pokémon with higher stats and stronger moves are equally likely to lose or win.
-    * Hₐ: Certain stats or moves significantly impact battle outcomes.
-* Use statistical tests like Chi-squared tests to compare the effectiveness of different moves or stats.
+* Train machine learning models to predict the winner of a battle based on Pokémon stats and move choices.
+* Evaluate model performance using accuracy and other classification metrics.
+* Use statistical to compare the effectiveness of different moves or stats.
 Example Analysis
 To illustrate, I’ll create a battle simulation where Pokémon A (e.g., Charizard) fights Pokémon B (e.g., Blastoise). The simulation will factor in:
 * Stats (Attack, Speed, HP)
@@ -73,5 +70,5 @@ By the end of this project, I hope to answer the following questions:
 * Which Pokémon stats most strongly influence battle outcomes?
 * How do type matchups and move choices affect battle success?
 * Can machine learning models reliably predict battle winners based on Pokémon stats and moves?
-This project will not only improve my understanding of Pokémon mechanics but also demonstrate how data science can be applied to game simulations and strategies. I’m excited to dive deeper into the data and see what insights can be uncovered!
+This project will not only improve my understanding of Pokémon mechanics but also demonstrate how data science can be applied to game simulations and strategies. Since I play pokemon from time to time I actually want to use my finding in a real battle to see if I'm more successful in battles.
 
