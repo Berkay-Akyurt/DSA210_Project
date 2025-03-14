@@ -34,13 +34,13 @@ The dataset used for this project is the Full Pokémon and Moves Dataset, which 
 
 Here are the contents:
 
-### Pokémon Attributes:
+Pokémon Attributes:
 - Name
 - Base stats (Attack, Defense, Speed, HP, Special Attack, Special Defense)
 - Type(s)
 - Evolutions (if applicable) // This might be too complicated though
 
-### Moves:
+Moves:
 - Move names
 - Move power, accuracy, and type
 - Whether a move is physical, special, or status-based
@@ -58,28 +58,27 @@ For the analysis and battle simulation, I’ll rely on the following tools:
 - NumPy: For numerical operations and handling large datasets
 
 ## Analysis Plan
-### Data Collection and Cleaning
+Data Collection and Cleaning
 - Load and preprocess the dataset using Pandas.
 - Handle missing values, duplicates, and standardize units across different Pokémon attributes and moves.
 
-### Data Exploration
+Data Exploration
 - Visualize distributions of Pokémon stats (Attack, Defense, Speed) and the effectiveness of different types of moves using scatter plots, heatmaps, and bar charts.
 - Analyze type advantages and how they affect battle outcomes by visualizing win rates between Pokémon of different types.
 
-### Feature Engineering
+Feature Engineering
 - Create features such as total stats (sum of all stats), type effectiveness, and move effectiveness.
 - For each battle simulation, create a feature set including the attacking Pokémon’s stats, moves, and the opponent's stats and type.
 
-### Battle Simulation
+Battle Simulation
 - Simulate 1v1 Pokémon battles by considering both Pokémon’s stats, moves, and type advantages.
 - Calculate damage dealt based on the Pokémon's attack, type effectiveness, and move power.
 
-### Modeling
+Modeling the ML Algorithm
 - Train machine learning models to predict the winner of a battle based on Pokémon stats and move choices.
 - Evaluate model performance using accuracy and other classification metrics.
-- Use statistical to compare the effectiveness of different moves or stats.
 
-## Example Analysis
+Example Analysis
 To illustrate, I’ll create a battle simulation where Pokémon A (e.g., Charizard) fights Pokémon B (e.g., Blastoise). The simulation will factor in:
 - Stats (Attack, Speed, HP)
 - Move Effectiveness (Fire vs. Water)
