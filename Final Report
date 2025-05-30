@@ -1,0 +1,77 @@
+Final Report: Pokémon Battle Simulation & Prediction
+
+1. Introduction
+
+In this project, we set out to explore how Pokémon base stats, move power, and type matchups drive the outcome of 1-on-1 battles. We combined a public dataset of Pokémon stats with move metadata to (1) conduct exploratory data analysis and hypothesis testing, (2) build a full turn-based Monte Carlo battle simulator, and (3) train two machine-learning pipelines—a logistic classifier and a regression model—to predict battle winners.
+
+2. Data & Feature Engineering
+	•	Datasets
+	•	metadata_pokemon.csv: 998 Pokémon with base stats (HP, Attack, Defense, Sp. Attack, Sp. Defense, Speed), height/weight, and two types.
+	•	metadata_pokemon_moves.csv: 808 moves with power, accuracy, damage class, and type.
+	•	Derived Features
+	1.	total_stat: sum of all six base stats → overall bulk.
+	2.	avg_type_power: mean move power by a Pokémon’s primary/secondary types → offensive strength by type.
+	3.	phys_power1: average power of all “Physical” moves for that Pokémon’s primary type.
+	4.	type_adv: full-chart type multiplier (e.g. Water→Fire = 2×) averaged over both defender types (monotypes get full strength).
+	5.	Δ-features: for any pair A vs B, we compute differences in total_stat, speed, avg_type_power, phys_power1, attack-vs-defense and defense-vs-attack, log-scaled speed delta, plus type_adv.
+
+3. Exploratory Data Analysis & Hypothesis Testing
+	•	Histograms & Scatterplots
+	•	Distribution of avg_type_power shows most Pokémon cluster between 60–100.
+	•	Weak positive trends in
+	•	Bulk (total_stat) vs move strength (avg_type_power)
+	•	Speed vs move strength
+	•	Attack vs physical move power (phys_power1)
+	•	Spearman Tests (α=0.05)
+	•	H01: total_stat ↔ avg_type_power (ρ≈0.16, p<0.001) → reject H₀
+	•	H02: speed ↔ avg_type_power (ρ≈0.07, p≈0.03) → reject H₀
+	•	H03: attack ↔ phys_power1 (ρ≈0.13, p<0.001) → reject H₀
+All three relationships are weak but statistically significant.
+
+4. Turn-Based Monte Carlo Simulator
+
+We implemented a faithful battle engine that:
+	1.	Selects up to four moves per side by expected damage (power × accuracy).
+	2.	Applies the official damage formula (STAB, type multipliers, random variance).
+	3.	Honors Speed for turn order and includes immediate defender counterattacks.
+	4.	Enforces a turn cap for guaranteed termination.
+
+This simulator produces realistic win/loss outcomes and continuous win percentages (over many trials) that serve both as ground truth and rich training labels.
+
+5. Logistic Regression on MC-Labels
+
+Rather than use an ad-hoc heuristic to label winners, we built an MC-labelled dataset (1 000 random pairs with one simulated battle each) and trained a logistic classifier on those true outcomes. This model now:
+	•	Learns correct weight for type_adv (rather than underweighting it)
+	•	Achieves > 98% accuracy and AUC > 0.99 on its training set
+	•	Provides fast P(win) estimates via predict_battle_ml(name_a, name_b)
+
+6. Regression on Continuous Win%
+
+Simulating 50–100 battles per pair is too slow for real-time. We therefore:
+	1.	Sampled 100 Pokémon pairs
+	2.	Estimated each pair’s true P(win) via 50 Monte Carlo trials
+	3.	Trained a LinearRegression to learn that continuous mapping from our Δ-features → P(win)
+	4.	Achieved R² ≈ 0.65–0.75 on held-out pairs
+
+Use predict_p_win_regression(name_a, name_b) for instant, nuanced win probabilities (e.g. 54.5%).
+
+7. Demo & Custom Battles
+
+In __main__, we showcase three illustrative matchups—Magikarp vs Gyarados (evolution underdog), Pikachu vs Raichu (mirror-match), and Blastoise vs Charizard (classic Water vs Fire). For each pair we print:
+	•	ML (logistic) probability
+	•	MC (simulator) empirical win%
+	•	Reg (regression) predicted win%
+
+Finally, we prompt the user to enter any two Pokémon names and output all three predictions on the spot.
+
+⸻
+
+Conclusion & Next Steps
+	•	Key insights: Bulk, speed, and type-power all matter—but their precise weights emerge only when trained on realistic battle data.
+	•	Performance: The regression model strikes the best balance of speed and fidelity for continuous win-rate estimation.
+	•	Future work:
+	•	Incorporate move accuracy more deeply (e.g. status moves, PP constraints).
+	•	Expand to multi-turn strategies (switching, status effects).
+	•	Validate predictions against live competitive battle logs.
+
+This pipeline demonstrates end-to-end data-science skills—from data enrichment and EDA to simulation, hypothesis testing, and machine learning—applied in a fun, game-theoretic context.
