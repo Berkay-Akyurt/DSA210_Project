@@ -66,12 +66,17 @@ Finally, we prompt the user to enter any two Pokémon names and output all three
 
 ⸻
 
-Conclusion & Next Steps
-	•	Key insights: Bulk, speed, and type-power all matter—but their precise weights emerge only when trained on realistic battle data.
-	•	Performance: The regression model strikes the best balance of speed and fidelity for continuous win-rate estimation.
-	•	Future work:
-	•	Incorporate move accuracy more deeply (e.g. status moves, PP constraints).
-	•	Expand to multi-turn strategies (switching, status effects).
-	•	Validate predictions against live competitive battle logs.
+Results Summary:
+    • **Feature importances (logistic)**:  
+      log Δ_speed > Δ_phys_pow > Δ_def_vs_atk > Δ_total_stat > Δ_atk_vs_def > Δ_speed > Δ_avg_type_pow > type_adv  
+    • **Regression coefficients**:  
+      type_adv had the largest weight for continuous P(win), confirming type matchups matter most when properly modeled.  
+    • **Demo battles** (e.g. Blastoise vs Charizard) show consistent Water-beats-Fire patterns in MC and regression, whereas the original heuristic ML sometimes mis-ranked monotypes.
+
+Conclusion & Future Work:
+    – We demonstrated an end-to-end pipeline that uncovers and quantifies how stats, moves, and types combine to decide Pokémon battles.  
+    – The regression model offers real-time, continuous win-rate estimates that closely track the slower Monte Carlo ground truth.  
+    – **Next steps**: incorporate move accuracy more deeply (e.g. status moves, PP limits), model switching/strategy changes, and validate against actual competitive battle logs or replay data.
+
 
 This pipeline demonstrates end-to-end data-science skills—from data enrichment and EDA to simulation, hypothesis testing, and machine learning—applied in a fun, game-theoretic context.
