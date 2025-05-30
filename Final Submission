@@ -1,0 +1,732 @@
+"""
+Ali Berkay Akyurt 34463
+Pokémon Battle Simulation - DSA210 Project
+
+Project Overview:
+    In this project, we harness Pokémon base stats and move data to simulate
+    1v1 battles, then train machine learning models to predict winners. Along
+    the way, we conduct exploratory analysis and hypothesis testing to
+    understand which attributes most strongly influence battle outcomes.
+
+    As you know, Pokémon is a game where you train your Pokémon and fight with other Pokémon trainers
+    in a turn-based fashion. Each Pokémon has its own stats, such as HP, Attack, Defense, Speed;
+    and each Pokémon can learn a set of moves (which have different elemental types). In most contexts,
+    you have to choose your team carefully, because the opponent Pokémon(s) may have an elemental advantage,
+    or their Pokémon might be stronger etc. So in order to win more, I came up with this project idea,
+    that would increase my chances of winning with the help of data science.
+
+We have 2 datasets:
+    1) Pokémon metadata (stats, types)
+    2) Move metadata (power, type, learnset)
+    Second dataset is used to find out which skills a Pokémon can learn, and in return can use in battles.
+    We will combine these datasets to create a comprehensive battle simulator, making two Pokémon fight each other
+    and predict the winner based on their stats such as speed and attack, elemental types and available moves.
+
+Objectives :
+    1) Understand Battle Influencers:
+         – Explore relationships among HP, Attack, Defense, Speed, and move power.
+         - We will see how these stats make a difference in battles, using regression and correlation
+           and by testing hypotheses (to see if one stat has more advantage over another).
+    2) Simulate Battles Using Data:
+         – Build a quick heuristic and a full turn-based Monte Carlo simulator.
+         - This will be used as a way to consolidate our finding with the logistic regression model.
+    3) Predict Battle Outcomes:
+         – Train a logistic classifier for instant predictions.
+         – Train a regression model to estimate continuous win probability.
+    4) Apply Data Science Skills:
+         – Use Pandas, Matplotlib/Seaborn, statistical tests, and scikit-learn.
+
+Motivation:
+    Personal interest in Pokémon mechanics fuels my desire to see which stats—
+    whether raw Attack, Speed, or type-based move power—matter most in a fight.
+"""
+
+import os
+import random
+
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Import necessary libraries
+from scipy.stats import spearmanr
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.metrics import accuracy_score, roc_auc_score, r2_score, mean_squared_error
+
+# ───────────────────────────────────────────────────────────────────────────────
+# SETUP & DATA LOADING
+# ───────────────────────────────────────────────────────────────────────────────
+FIG_DIR = "figures"
+os.makedirs(FIG_DIR, exist_ok=True)
+
+# Load the two Kaggle CSVs specified in the proposal:
+#  - metadata_pokemon.csv    (Pokémon stats & types)
+#  - metadata_pokemon_moves.csv (Move metadata + learnset mapping)
+pkmn_df  = pd.read_csv("data/metadata_pokemon.csv")
+moves_df = pd.read_csv("data/metadata_pokemon_moves.csv")
+
+# Normalize type strings for consistency in lookups
+pkmn_df["type_1"] = pkmn_df["type_1"].str.lower()
+pkmn_df["type_2"] = pkmn_df["type_2"].fillna("none").str.lower()
+moves_df["type"]  = moves_df["type"].str.lower()
+
+print(f"Loaded {len(pkmn_df)} Pokémon and {len(moves_df)} move entries")
+
+# ───────────────────────────────────────────────────────────────────────────────
+# FULL TYPE‐EFFECTIVENESS CHART
+# ───────────────────────────────────────────────────────────────────────────────
+"""
+    Each elemental type has a set of effectiveness multipliers against other types.
+    This is the most fun part about pokémons, and a very important thing in battles
+    Because in case you didn't play before, some types are stronger against others,
+    and some are weaker, and some are completely immune to others. So you would have
+    to choose your pokémon and moves wisely, to have the best chance of winning.
+"""
+effectiveness = {
+    "normal":   {"rock":0.5,"ghost":0.0},
+    "fire":     {"fire":0.5,"water":0.5,"grass":2.0,"ice":2.0,"bug":2.0,
+                 "rock":0.5,"dragon":0.5,"steel":2.0},
+    "water":    {"fire":2.0,"water":0.5,"grass":0.5,"ground":2.0,
+                 "rock":2.0,"dragon":0.5},
+    "electric": {"water":2.0,"electric":0.5,"grass":0.5,"ground":0.0,
+                 "flying":2.0,"dragon":0.5},
+    "grass":    {"fire":0.5,"water":2.0,"grass":0.5,"poison":0.5,
+                 "ground":2.0,"flying":0.5,"bug":0.5,"rock":2.0,"dragon":0.5,"steel":0.5},
+    "ice":      {"fire":0.5,"water":0.5,"grass":2.0,"ground":2.0,
+                 "flying":2.0,"dragon":2.0,"steel":0.5},
+    "fighting": {"normal":2.0,"ice":2.0,"rock":2.0,"dark":2.0,"steel":2.0,
+                 "poison":0.5,"flying":0.5,"psychic":0.5,"bug":0.5,"ghost":0.0,"fairy":0.5},
+    "poison":   {"grass":2.0,"fairy":2.0,"poison":0.5,"ground":0.5,
+                 "rock":0.5,"ghost":0.5,"steel":0.0},
+    "ground":   {"poison":2.0,"rock":2.0,"steel":2.0,"fire":2.0,"electric":2.0,
+                 "grass":0.5,"bug":0.5,"flying":0.0},
+    "flying":   {"grass":2.0,"fighting":2.0,"bug":2.0,"electric":0.5,
+                 "rock":0.5,"steel":0.5},
+    "psychic":  {"fighting":2.0,"poison":2.0,"psychic":0.5,"steel":0.5,"dark":0.0},
+    "bug":      {"grass":2.0,"psychic":2.0,"dark":2.0,"fire":0.5,"fighting":0.5,
+                 "poison":0.5,"flying":0.5,"ghost":0.5,"steel":0.5,"fairy":0.5,"rock":0.5},
+    "rock":     {"fire":2.0,"ice":2.0,"flying":2.0,"bug":2.0,"fighting":0.5,
+                 "ground":0.5,"steel":0.5},
+    "ghost":    {"ghost":2.0,"psychic":2.0,"dark":0.5,"normal":0.0},
+    "dragon":   {"dragon":2.0,"steel":0.5,"fairy":0.0},
+    "dark":     {"psychic":2.0,"ghost":2.0,"fighting":0.5,"dark":0.5,"fairy":0.5},
+    "steel":    {"ice":2.0,"rock":2.0,"fairy":2.0,"fire":0.5,"water":0.5,
+                 "electric":0.5,"steel":0.5},
+    "fairy":    {"fighting":2.0,"dragon":2.0,"dark":2.0,"fire":0.5,"poison":0.5,
+                 "steel":0.5}
+}
+
+def get_mult(att_type: str, def_type: str) -> float:
+    """
+      In Pokémon, move damage is scaled by type matchups (e.g. Fire→Grass is 2×,
+      Water→Fire is 2×, etc.). We need a single place to look up the correct
+      multiplier for any attacker type against any defender type—this is the
+      heart of “type effectiveness” in your proposal.
+
+    Input:
+      att_type – the attacking move’s type (e.g. "fire")
+      def_type – the defending Pokémon’s type (e.g. "grass")
+
+    Output:
+      A float multiplier (0.0, 0.5, 1.0, 2.0, etc.) used in all damage
+      calculations and also in feature engineering for “type_adv.”
+    """
+    return effectiveness.get(att_type, {}).get(def_type, 1.0)
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 2) FEATURE ENGINEERING
+#    Create new battle‐relevant features from raw stats and move data.
+# ───────────────────────────────────────────────────────────────────────────────
+
+# 2.1 total_stat: overall bulk metric – sum of all six base stats
+stat_cols = ["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
+pkmn_df["total_stat"] = pkmn_df[stat_cols].sum(axis=1)
+# → Now each Pokémon has a single “total_stat” column capturing its overall strength.
+
+# 2.2 avg_type_power: how strong are this Pokémon’s moves, on average, by type?
+#   a) First compute the mean power of every move, grouped by move type.
+type_power = (
+    moves_df
+      .groupby("type")["power"]           # for each type
+      .mean()                             # average its 'power' values
+      .reset_index(name="avg_power_by_type")
+)
+#   b) Merge these avg move‐powers back into the Pokémon DataFrame for both its
+#      primary and secondary types.
+for tcol, out in [("type_1", "power_type1"), ("type_2", "power_type2")]:
+    pkmn_df = (
+        pkmn_df
+          .merge(type_power, left_on=tcol, right_on="type", how="left")
+          .rename(columns={"avg_power_by_type": out})
+          .drop(columns="type")           # drop the temporary 'type' column
+    )
+#   c) Combine the two type‐power columns into a single feature,
+#      defaulting to primary-type power if no secondary type exists.
+pkmn_df["avg_type_power"] = (
+    pkmn_df[["power_type1", "power_type2"]]
+      .mean(axis=1)                      # average across both types
+      .fillna(pkmn_df["power_type1"])   # if a Pokémon has no type_2
+)
+
+# 2.3 phys_power1: average power of *Physical* moves for the primary type
+#   a) Filter moves to only those with damage_class == "Physical", then average by type
+phys_power = (
+    moves_df[moves_df["damage_class"] == "Physical"]
+      .groupby("type")["power"]
+      .mean()
+      .reset_index(name="avg_phys_power")
+)
+#   b) Merge that back into pkmn_df, keyed on primary type
+pkmn_df = (
+    pkmn_df
+      .merge(phys_power, left_on="type_1", right_on="type", how="left")
+      .rename(columns={"avg_phys_power": "phys_power1"})
+      .drop(columns="type")             # drop the temporary merge column
+)
+#   c) Fill any missing values with 0 (e.g., if a type had no physical moves)
+pkmn_df["phys_power1"] = pkmn_df["phys_power1"].fillna(0)
+
+# Quick check: show the first few rows of our new features
+print("\nEnriched sample:")
+print(
+    pkmn_df[["name", "total_stat", "avg_type_power", "phys_power1"]]
+    .head()
+)
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 3) EXPLORATORY DATA ANALYSIS (EDA)
+#    Visualize distributions and relationships to guide hypotheses
+# ───────────────────────────────────────────────────────────────────────────────
+
+def save_and_show(name):
+    """
+    Helper function to:
+      1) tighten layout so labels/titles aren't cut off,
+      2) save the current figure to figures/<name>.png,
+      3) display the figure inline.
+    This ensures all EDA outputs are both visible now and stored for your report.
+    """
+    plt.tight_layout()
+    plt.savefig(f"{FIG_DIR}/{name}.png")
+    plt.show()
+
+
+# 3.1 Histogram: How does avg_type_power distribute across all Pokémon?
+#    - Checks for skew, outliers, and whether most have similar move power
+plt.figure(figsize=(6,3))
+sns.histplot(pkmn_df["avg_type_power"], kde=True)
+plt.title("Distribution of Avg Type-Power")
+save_and_show("hist_avg_type_power")
+
+
+# 3.2 Scatterplot: total_stat vs avg_type_power
+#    - Is “bulk” (total_stat) related to average move strength?
+#    - Points above/below trendline suggest interesting outliers
+plt.figure(figsize=(6,4))
+sns.scatterplot(
+    data=pkmn_df,
+    x="total_stat",        # overall bulk
+    y="avg_type_power",    # average move power by type
+    alpha=0.6              # semi‐transparent to see dense regions
+)
+plt.title("Total Stat vs Avg Type-Power")
+save_and_show("scatter_total_vs_type_power")
+
+
+# 3.3 Scatterplot: speed vs avg_type_power
+#    - Do faster Pokémon also tend to have stronger moves?
+#    - Helps decide if speed correlates with offensive capability
+plt.figure(figsize=(6,4))
+sns.scatterplot(
+    data=pkmn_df,
+    x="speed",             # raw Speed stat
+    y="avg_type_power",    # average type‐based move power
+    alpha=0.6
+)
+plt.title("Speed vs Avg Type-Power")
+save_and_show("scatter_speed_vs_type_power")
+
+
+# 3.4 Scatterplot: attack vs phys_power1
+#    - Does a high Attack stat translate into stronger physical moves?
+#    - Tests whether raw Attack correlates with the power of physical moves
+plt.figure(figsize=(6,4))
+sns.scatterplot(
+    data=pkmn_df,
+    x="attack",    # raw Attack stat
+    y="phys_power1",  # avg power of physical moves for primary type
+    alpha=0.6
+)
+plt.title("Attack vs Avg Physical Move-Power")
+save_and_show("scatter_attack_vs_phys_power")
+
+
+# 3.5 Heatmap: count of Pokémon by primary vs secondary type
+#    - Visualizes the distribution of type combinations in the dataset
+#    - Can reveal which type duos are common/rare, guiding any type-based analysis
+pivot = (
+    pkmn_df
+      .groupby(["type_1", "type_2"])
+      .size()
+      .unstack(fill_value=0)
+)
+plt.figure(figsize=(12,10))
+sns.heatmap(
+    pivot,
+    annot=True,     # show counts in each cell
+    fmt="d"         # integer format
+)
+plt.title("Count by Primary vs Secondary Type")
+save_and_show("heatmap_type_combos")
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 4) HYPOTHESIS TESTING
+#    Statistically verify whether the relationships observed in EDA
+#    hold true at α = 0.05 significance level.
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Define the three hypothesis tests we want to run:
+#   H01: total_stat uncorrelated with avg_type_power?
+#   H02: speed uncorrelated with avg_type_power?
+#   H03: attack uncorrelated with phys_power1?
+tests = [
+    ("total_stat",   "avg_type_power", "H01: bulk vs move strength"),
+    ("speed",        "avg_type_power", "H02: speed vs move strength"),
+    ("attack",       "phys_power1",    "H03: raw Attack vs phys move power"),
+]
+
+# Loop over each pair, compute Spearman’s rank correlation, then decide:
+#   – ρ (rho) measures monotonic association strength
+#   – p-value tells us if that association is unlikely under H₀ of no correlation
+#   – If p < 0.05, we “Reject H₀” and conclude there is a significant correlation
+for x_col, y_col, label in tests:
+    # 1) Calculate Spearman’s correlation coefficient and p-value
+    rho, p = spearmanr(pkmn_df[x_col], pkmn_df[y_col])
+
+    # 2) Interpret result at the 5% significance level
+    if p < 0.05:
+        verdict = "Reject H₀ (significant correlation)"
+    else:
+        verdict = "Fail to reject H₀ (no evidence of correlation)"
+
+    # 3) Print a clear summary for each hypothesis
+    print(
+        f"{label}: ρ = {rho:.3f}, p = {p:.3f} → {verdict}"
+    )
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 5) TURN‐BASED MONTE CARLO SIMULATOR
+#    Provides realistic “ground truth” by modeling actual Pokémon battle mechanics:
+#      • Only uses moves a Pokémon could learn (by matching move type to its types)
+#      • Applies the official damage formula (STAB, type multipliers, random variance)
+#      • Honors Speed to determine turn order and includes defender counterattacks
+#    This simulator:
+#      a) Validates our logistic regression’s quick labels
+#      b) Supplies continuous win% targets for the regression model
+# ───────────────────────────────────────────────────────────────────────────────
+
+def select_moveset(pkmn, moves_df, max_moves=4):
+    """
+    Why this exists:
+      To ensure each Pokémon in our Monte Carlo battle only uses moves it could
+      plausibly know. Without a separate learnset file, we approximate that any
+      move whose type matches the Pokémon’s primary or secondary type is valid.
+
+    Input:
+      pkmn      – a Pandas Series row from metadata_pokemon.csv
+      moves_df  – the full metadata_pokemon_moves.csv DataFrame
+      max_moves – maximum number of moves to select (default 4)
+
+    Output:
+      A list of up to `max_moves` move dicts, each augmented with an `exp_dmg`
+      field = power × (accuracy/100), sorted by expected damage descending.
+    """
+    # 1) Filter to moves whose type matches one of the Pokémon’s types
+    subset = moves_df[
+        moves_df["type"].isin([pkmn["type_1"], pkmn["type_2"]])
+    ].copy()
+
+    # 2) Compute expected damage per move: power × (accuracy fraction)
+    subset["exp_dmg"] = (
+        subset["power"].fillna(0) *
+        (subset["accuracy"].fillna(0) / 100)
+    )
+
+    # 3) Select and return the top `max_moves` by expected damage
+    return subset.nlargest(max_moves, "exp_dmg").to_dict("records")
+
+
+def compute_damage(att, df, move, level=50):
+    """
+    Why this exists:
+      To accurately model in‐game hitpoint loss, we use the official Pokémon
+      damage formula:
+        Damage = ((((2*L/5+2) × Power × A/D) / 50) + 2)
+               × STAB × TypeMultiplier × RandomFactor
+
+    Inputs:
+      att   – attacker’s stats row (Series→dict-like)
+      df    – defender’s stats row
+      move  – a move dict from select_moveset()
+      level – battle level (default 50)
+
+    Output:
+      Float HP damage dealt by this single move execution.
+    """
+    # 1) Base power (0 if missing)
+    pwr = move.get("power", 0) or 0
+
+    # 2) Choose right attack/defense stats based on damage class
+    if move["damage_class"].lower() == "physical":
+        A, D = att["attack"], df["defense"]
+    else:
+        A, D = att["special_attack"], df["special_defense"]
+
+    # 3) Same‐Type Attack Bonus if move type matches attacker’s type
+    stab = 1.5 if move["type"] in (att["type_1"], att["type_2"]) else 1.0
+
+    # 4) Full‐chart type multiplier vs both defender types
+    tm = (
+        get_mult(move["type"], df["type_1"]) *
+        get_mult(move["type"], df["type_2"])
+    )
+
+    # 5) Compute base damage
+    base = (((2 * level / 5 + 2) * pwr * A / D) / 50) + 2
+
+    # 6) Apply random variance [0.85, 1.0]
+    return base * stab * tm * random.uniform(0.85, 1.0)
+
+
+def simulate_battle(a, b, moves_df, level=50, max_turns=200):
+    """
+    Why this exists:
+      This function runs a full turn-based battle simulation—our “ground truth”—
+      but with a turn cap to avoid infinite loops (e.g., if every move keeps
+      missing). It models:
+        • Speed-based turn order
+        • Best-move selection via expected damage
+        • Official damage formula (STAB, type multipliers, random variance)
+        • Immediate defender counterattacks
+        • A maximum of `max_turns` to guarantee termination.
+
+    Inputs:
+      a, b       – two Pandas Series rows from metadata_pokemon.csv
+      moves_df   – DataFrame of all moves (metadata_pokemon_moves.csv)
+      level      – battle level (default 50)
+      max_turns  – maximum number of total turns before forcing a tie-break
+
+    Output:
+      1 if Pokémon `a` wins (knocks out `b`), otherwise 0.
+      If `max_turns` is reached, winner is decided by remaining HP.
+    """
+    # 1) Initialize each side’s HP
+    hp_a, hp_b = a["hp"], b["hp"]
+
+    # 2) Pre-select up to 4 moves for each side based on expected damage
+    ms_a = select_moveset(a, moves_df)
+    ms_b = select_moveset(b, moves_df)
+
+    # 3) If either side has no moves, they lose immediately
+    if not ms_a or not ms_b:
+        return 0
+
+    turns = 0
+    # 4) Battle loop: stop when someone faints or we hit the turn cap
+    while hp_a > 0 and hp_b > 0 and turns < max_turns:
+        turns += 1
+
+        # 4a) Determine attacker/defender by comparing speed
+        if a["speed"] >= b["speed"]:
+            attacker, defender, moveset, target = (a, b, ms_a, "b")
+        else:
+            attacker, defender, moveset, target = (b, a, ms_b, "a")
+
+        # 4b) Attacker uses its highest‐exp_dmg move
+        move = max(moveset, key=lambda m: m["exp_dmg"])
+        # 4c) Roll for hit based on accuracy
+        if random.random() <= (move["accuracy"] or 0) / 100:
+            dmg = compute_damage(attacker, defender, move, level)
+            if target == "b":
+                hp_b -= dmg
+            else:
+                hp_a -= dmg
+
+        # 4d) If defender still alive, they counterattack immediately
+        if hp_a > 0 and hp_b > 0:
+            # swap roles for counter
+            if target == "b":
+                attacker, defender, moveset, target = (b, a, ms_b, "a")
+            else:
+                attacker, defender, moveset, target = (a, b, ms_a, "b")
+
+            move = max(moveset, key=lambda m: m["exp_dmg"])
+            if random.random() <= (move["accuracy"] or 0) / 100:
+                dmg = compute_damage(attacker, defender, move, level)
+                if target == "b":
+                    hp_b -= dmg
+                else:
+                    hp_a -= dmg
+
+    # 5) If we exited due to turn cap, decide by who has more HP
+    if hp_a > 0 and hp_b > 0:
+        return 1 if hp_a >= hp_b else 0
+
+    # 6) Otherwise, winner is the one who didn’t faint
+    return 1 if hp_b <= 0 else 0
+
+def estimate_win_prob(name_a, name_b, trials=60):
+    """
+    Why this exists:
+      Runs `simulate_battle` repeatedly to produce an empirical win%
+      for Pokémon `name_a` vs `name_b`. This serves as:
+        • Validation for the logistic classifier.
+        • Continuous targets for the regression model.
+
+    Inputs:
+      name_a, name_b – Pokémon names (case-insensitive)
+      trials         – number of simulated battles to average
+
+    Output:
+      Float win probability in [0,1].
+    """
+    # Lookup the two Pokémon rows
+    lo = pkmn_df["name"].str.lower()
+    a  = pkmn_df[lo == name_a.lower()].iloc[0]
+    b  = pkmn_df[lo == name_b.lower()].iloc[0]
+
+    # Simulate and count wins
+    wins = sum(simulate_battle(a, b, moves_df) for _ in range(trials))
+    p    = wins / trials
+
+    # Display result
+    print(f"MC P({name_a} beats {name_b}) ≈ {p*100:.1f}%")
+    return p
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 6) MONTE CARLO LABELS + LOGISTIC REGRESSION
+#    Train logistic regression on real Monte Carlo–simulated outcomes so it
+#    learns the true impact of stats, move power, accuracy, and type advantage.
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Quick lookup by Pokémon ID
+idx = pkmn_df.set_index("id")
+
+def build_mc_dataset(n_samples=1000, level=50, max_turns=200):
+    """
+      Instead of using a heuristic label, we use actual simulated battles to
+      generate binary win/loss labels. This gives our classifier ground-truth
+      data reflecting real type advantages and accuracy misses.
+
+    Inputs:
+      n_samples – number of random battle examples to generate
+      level     – battle level for damage formula
+      max_turns – turn cap to avoid infinite loops in simulations
+
+    Output:
+      DataFrame with Δ-features and a 'winner' column (0 or 1).
+    """
+    records = []
+    # sample 2× n_samples IDs (with replacement) and pair them
+    pairs = random.choices(list(pkmn_df["id"]), k=n_samples*2)
+    for i in range(0, len(pairs), 2):
+        A, B = pairs[i], pairs[i+1]
+        if A == B:
+            continue  # skip self-battles
+        a, b = idx.loc[A], idx.loc[B]
+
+        # Compute type advantage correctly for monotypes
+        m1 = get_mult(a.type_1, b.type_1) * get_mult(a.type_1, b.type_2)
+        m2 = get_mult(a.type_2, b.type_1) * get_mult(a.type_2, b.type_2)
+        if a["type_2"] == "none":
+            type_adv = m1
+        else:
+            type_adv = (m1 + m2) / 2
+
+        feats = {
+            "d_total_stat":   a.total_stat    - b.total_stat,
+            "d_avg_type_pow": a.avg_type_power- b.avg_type_power,
+            "d_speed":        a.speed         - b.speed,
+            "log_d_speed":    np.log1p(abs(a.speed-b.speed)) * np.sign(a.speed-b.speed),
+            "d_phys_pow":     a.phys_power1   - b.phys_power1,
+            "d_atk_vs_def":   a.attack        - b.defense,
+            "d_def_vs_atk":   a.defense       - b.attack,
+            "type_adv":       type_adv
+        }
+
+        # Simulate one battle to get a true 0/1 label
+        feats["winner"] = simulate_battle(a, b, moves_df, level=level, max_turns=max_turns)
+        records.append(feats)
+
+    return pd.DataFrame(records)
+
+# Build the Monte Carlo–labeled dataset
+df_mc = build_mc_dataset(n_samples=1000, level=50, max_turns=200)
+
+# Split into features (X_mc) and labels (y_mc)
+X_mc = df_mc.drop(columns="winner")
+y_mc = df_mc["winner"]
+
+# Train logistic regression on true simulated labels
+clf_mc = LogisticRegression(max_iter=1000, random_state=42).fit(X_mc, y_mc)
+
+# Evaluate on the same data (or use a train/test split if desired)
+y_pred_mc = clf_mc.predict(X_mc)
+y_prob_mc = clf_mc.predict_proba(X_mc)[:,1]
+print(f"MC-trained LogReg Acc = {accuracy_score(y_mc, y_pred_mc):.3f}, "
+      f"AUC = {roc_auc_score(y_mc, y_prob_mc):.3f}")
+print("MC-trained Coefficients:\n",
+      pd.Series(clf_mc.coef_[0], index=X_mc.columns).sort_values(ascending=False))
+
+
+def predict_battle_ml_mc(name_a: str, name_b: str) -> float:
+    """
+    Fast ML prediction using the logistic model trained on Monte Carlo outcomes.
+    Recomputes all Δ-features for the two named Pokémon.
+    """
+    lo = pkmn_df["name"].str.lower()
+    a  = pkmn_df[lo == name_a.lower()].iloc[0]
+    b  = pkmn_df[lo == name_b.lower()].iloc[0]
+
+    m1 = get_mult(a.type_1, b.type_1) * get_mult(a.type_1, b.type_2)
+    m2 = get_mult(a.type_2, b.type_1) * get_mult(a.type_2, b.type_2)
+    if a["type_2"] == "none":
+        type_adv = m1
+    else:
+        type_adv = (m1 + m2) / 2
+
+    feats = pd.DataFrame([{
+        "d_total_stat":   a.total_stat    - b.total_stat,
+        "d_avg_type_pow": a.avg_type_power- b.avg_type_power,
+        "d_speed":        a.speed         - b.speed,
+        "log_d_speed":    np.log1p(abs(a.speed-b.speed)) * np.sign(a.speed-b.speed),
+        "d_phys_pow":     a.phys_power1   - b.phys_power1,
+        "d_atk_vs_def":   a.attack        - b.defense,
+        "d_def_vs_atk":   a.defense       - b.attack,
+        "type_adv":       (m1 + m2) / 2
+    }])
+
+    prob = clf_mc.predict_proba(feats)[0,1]
+    print(f"MC-trained ML P({name_a} beats {name_b}) = {prob*100:.1f}%")
+    return prob
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 7) REGRESSION ON CONTINUOUS WIN% TARGETS
+#    Why regression?
+#      • Monte Carlo simulation gives us a realistic, continuous win% for any pair,
+#        but running hundreds of battles each time is too slow for real‐time use.
+#      • By training a regression model on these Monte Carlo win% targets,
+#        we learn a direct mapping from our battle features to P(win).
+#      • Once fitted, the regression can instantly predict nuanced win probabilities
+#        (e.g. 54.5% instead of just “win or lose”), capturing the gray areas between
+#        two evenly‐matched Pokémon.
+# ───────────────────────────────────────────────────────────────────────────────
+
+# 7.1 Sample random Pokémon pairs to build our regression dataset
+N_PAIRS = 100
+names   = random.sample(list(pkmn_df["name"]), k=N_PAIRS * 2)
+pairs   = list(zip(names[:N_PAIRS], names[N_PAIRS:]))
+
+rows = []
+for a_name, b_name in pairs:
+    # Estimate continuous win% via Monte Carlo
+    p_win = estimate_win_prob(a_name, b_name, trials=50)
+
+    # Lookup stats for both Pokémon
+    a = pkmn_df[pkmn_df.name == a_name].iloc[0]
+    b = pkmn_df[pkmn_df.name == b_name].iloc[0]
+
+    # Compute full‐chart type advantage feature
+    m1 = get_mult(a.type_1, b.type_1) * get_mult(a.type_1, b.type_2)
+    m2 = get_mult(a.type_2, b.type_1) * get_mult(a.type_2, b.type_2)
+    if a["type_2"] == "none":
+        type_adv = m1
+    else:
+        type_adv = (m1 + m2) / 2
+
+    # Append feature differences and continuous target
+    rows.append({
+        "d_total_stat": a.total_stat    - b.total_stat,
+        "d_speed":      a.speed         - b.speed,
+        "d_phys_pow":   a.phys_power1   - b.phys_power1,
+        "type_adv":     (m1 + m2) / 2,
+        "p_win":        p_win
+    })
+
+# Convert to DataFrame and inspect
+df_reg = pd.DataFrame(rows)
+print("\nRegression sample:\n", df_reg.head())
+
+# 7.2 Train/test split & fit LinearRegression
+Xr       = df_reg.drop(columns="p_win")
+yr       = df_reg["p_win"]
+Xr_tr, Xr_te, yr_tr, yr_te = train_test_split(Xr, yr, test_size=0.2, random_state=42)
+reg      = LinearRegression().fit(Xr_tr, yr_tr)
+
+# 7.3 Evaluate regression performance
+pred   = reg.predict(Xr_te)
+print(f"\nReg R²={r2_score(yr_te, pred):.3f}, MSE={mean_squared_error(yr_te, pred):.4f}")
+print("Reg coefs:\n", pd.Series(reg.coef_, index=Xr.columns))
+
+# 7.4 Prediction function for continuous P(win)
+def predict_p_win_regression(name_a: str, name_b: str) -> float:
+    """
+    Uses the regression model to predict a continuous win% for two Pokémon,
+    approximating the Monte Carlo simulator’s outputs in O(1) time.
+    """
+    lo = pkmn_df["name"].str.lower()
+    a  = pkmn_df[lo == name_a.lower()].iloc[0]
+    b  = pkmn_df[lo == name_b.lower()].iloc[0]
+
+    # Recompute features
+    m1    = get_mult(a.type_1, b.type_1) * get_mult(a.type_1, b.type_2)
+    m2    = get_mult(a.type_2, b.type_1) * get_mult(a.type_2, b.type_2)
+    feats = pd.DataFrame([[
+        a.total_stat - b.total_stat,
+        a.speed      - b.speed,
+        a.phys_power1- b.phys_power1,
+        (m1 + m2) / 2
+    ]], columns=Xr.columns)
+
+    pw = reg.predict(feats)[0]
+    print(f"Reg P({name_a} beats {name_b}) ≈ {pw*100:.1f}%")
+    return pw
+
+# ───────────────────────────────────────────────────────────────────────────────
+# MAIN PROGRAM
+#    Showcase three diverse matchups—an underdog vs powerhouse, a mirror‐match,
+#    and a classic elemental counter—to illustrate how the three methods compare.
+#    Then allow a quick custom battle via user input.
+# ───────────────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    # Define three illustrative battles:
+    demo_pairs = [
+        # 1) Magikarp vs Gyarados: extreme evolution underdog
+        ("Magikarp", "Gyarados"),
+        # 2) Pikachu vs Raichu: mirror match within same family
+        ("Pikachu", "Raichu"),
+        # 3) Blastoise vs Charizard: classic Water vs Fire counter
+        ("Blastoise", "Charizard"),
+    ]
+
+    for a, b in demo_pairs:
+        print(f"\n=== Demo Battle: {a} vs {b} ===")
+        # 1) Instant ML estimate (now using the MC-trained logistic)
+        ml_prob = predict_battle_ml_mc(a, b)
+        # 2) Realistic Monte Carlo
+        mc_prob = estimate_win_prob(a, b, trials=100)
+        # 3) Fast regression approximation
+        reg_prob = predict_p_win_regression(a, b)
+        print(f"Summary → ML: {ml_prob * 100:.1f}% | MC: {mc_prob * 100:.1f}% | Reg: {reg_prob * 100:.1f}%")
+
+    # We can also llow the user to try their own custom matchup
+    print("\nNow it's your turn! (If you want to test a custom battle)")
+    name_a = input("Enter first Pokémon name: ").strip()
+    name_b = input("Enter second Pokémon name: ").strip()
+
+    print(f"\n--- Custom Battle: {name_a} vs {name_b} ---")
+    predict_battle_ml_mc(name_a, name_b)
+    estimate_win_prob(name_a, name_b, trials=50)
+    predict_p_win_regression(name_a, name_b)
